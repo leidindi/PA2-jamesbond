@@ -5,7 +5,6 @@ from torch.utils.data import Dataset, DataLoader
 import os
 import h5py
 import matplotlib.pyplot as plt
-from torchsummary import summary
 
 def get_dataset_name(file_name_with_dir):
     filename_without_dir = file_name_with_dir.split('/')[-1] #If you use windows change / with \\
@@ -93,14 +92,13 @@ hidden_size = 128  # Hidden state size of LSTM
 output_size = 4  # Number of classes
 num_layers = 3  # Number of LSTM layers
 model = AttentionLSTM(input_size, hidden_size, output_size, num_layers)
-summary(model, (248,160))
 
 # Loss and optimizer
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.001)
 
 # Training
-num_epochs = 10
+num_epochs = 4
 accuracy_history = []
 
 for epoch in range(num_epochs):
@@ -108,8 +106,11 @@ for epoch in range(num_epochs):
     model.train()
     total_correct_train = 0
     total_samples_train = 0
+    class_correct_train = [0] * output_size
+    class_total_train = [0] * output_size
 
     for signals, targets in train_dataloader:
+        signals = signals.permute(0, 2, 1)
         optimizer.zero_grad()
         outputs = model(signals)
         loss = criterion(outputs, torch.argmax(targets, dim=1))
@@ -120,25 +121,48 @@ for epoch in range(num_epochs):
         total_samples_train += targets.size(0)
         total_correct_train += (predicted_train == torch.argmax(targets, dim=1)).sum().item()
 
+        # Calculate class-wise accuracy
+        for i in range(output_size):
+            class_total_train[i] += (targets[:, i] == 1).sum().item()
+            class_correct_train[i] += ((predicted_train == i) & (targets[:, i] == 1)).sum().item()
+
     train_accuracy = total_correct_train / total_samples_train
     print(f'Training Accuracy: {train_accuracy}')
 
-# Testing
-model.eval()
-total_correct_test = 0
-total_samples_test = 0
+    # Print class-wise accuracy
+    for i in range(output_size):
+        class_accuracy = class_correct_train[i] / class_total_train[i]
+        print(f'Training Class {i} Accuracy: {class_accuracy}  | Total tests: {class_total_train[i]}')
 
-with torch.no_grad():
-    for signals, targets in test_dataloader:
-        outputs = model(signals)
-        _, predicted_test = torch.max(outputs, 1)
-        total_samples_test += targets.size(0)
-        total_correct_test += (predicted_test == torch.argmax(targets, dim=1)).sum().item()
+    accuracy_history.append(train_accuracy)
 
-test_accuracy = total_correct_test / total_samples_test
-print(f'Test Accuracy: {test_accuracy}')
+    # Testing
+    model.eval()
+    total_correct_test = 0
+    total_samples_test = 0
+    class_correct_test = [0] * output_size
+    class_total_test = [0] * output_size
 
-accuracy_history.append(test_accuracy)
+    with torch.no_grad():
+        for signals, targets in test_dataloader:
+            signals = signals.permute(0, 2, 1)
+            outputs = model(signals)
+            _, predicted_test = torch.max(outputs, 1)
+            total_samples_test += targets.size(0)
+            total_correct_test += (predicted_test == torch.argmax(targets, dim=1)).sum().item()
+
+            # Calculate class-wise accuracy
+            for i in range(output_size):
+                class_total_test[i] += (targets[:, i] == 1).sum().item()
+                class_correct_test[i] += ((predicted_test == i) & (targets[:, i] == 1)).sum().item()
+
+    test_accuracy = total_correct_test / total_samples_test
+    print(f'Test Accuracy: {test_accuracy}')
+
+    # Print class-wise accuracy for testing
+    for i in range(output_size):
+        class_accuracy = class_correct_test[i] / class_total_test[i]
+        print(f'Test Class {i} Accuracy: {class_accuracy} | Total tests: {class_total_test[i]}')
 
 # Plot the accuracy improvement
 plt.plot(range(1, num_epochs + 1), accuracy_history, marker='o')
