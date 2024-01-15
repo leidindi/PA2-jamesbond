@@ -95,11 +95,12 @@ model = AttentionLSTM(input_size, hidden_size, output_size, num_layers)
 
 # Loss and optimizer
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=0.001)
+optimizer = optim.Adam(model.parameters(), lr=0.0001)
 
 # Training
-num_epochs = 4
-accuracy_history = []
+num_epochs = 50
+accuracy_train_history = []
+accuracy_test_history = []
 
 for epoch in range(num_epochs):
     print(f"Epoch {epoch + 1}/{num_epochs}")
@@ -134,7 +135,7 @@ for epoch in range(num_epochs):
         class_accuracy = class_correct_train[i] / class_total_train[i]
         print(f'Training Class {i} Accuracy: {class_accuracy}  | Total tests: {class_total_train[i]}')
 
-    accuracy_history.append(train_accuracy)
+    accuracy_train_history.append(train_accuracy)
 
     # Testing
     model.eval()
@@ -164,9 +165,13 @@ for epoch in range(num_epochs):
         class_accuracy = class_correct_test[i] / class_total_test[i]
         print(f'Test Class {i} Accuracy: {class_accuracy} | Total tests: {class_total_test[i]}')
 
+    accuracy_test_history.append(test_accuracy)
+
 # Plot the accuracy improvement
-plt.plot(range(1, num_epochs + 1), accuracy_history, marker='o')
+plt.plot(range(1, num_epochs + 1), accuracy_train_history, marker='o', label='Training')
+plt.plot(range(1, num_epochs + 1), accuracy_test_history, marker='o', label='Testing')
 plt.title('Accuracy Improvement Over Epochs')
 plt.xlabel('Epoch')
 plt.ylabel('Accuracy')
+plt.legend()
 plt.show()
