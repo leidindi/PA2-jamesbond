@@ -10,6 +10,10 @@ import time
 import logging
 import random
 import numpy as np
+from torch.utils.data import DataLoader, Dataset
+import h5py
+from tqdm import tqdm
+from torchsummary import summary
 
 os.makedirs('./examples_vanilla_torch/log', exist_ok=True)
 logger = logging.getLogger('Training models with vanilla PyTorch')
@@ -39,6 +43,7 @@ k_fold = KFoldPerSubject(n_splits=10,
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 # training process
+'''
 def train(dataloader, model, loss_fn, optimizer):
     size = len(dataloader.dataset)
     model.train()
@@ -60,8 +65,9 @@ def train(dataloader, model, loss_fn, optimizer):
             logger.info(f"Loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
 
     return loss
-
+'''
 # validation process
+''
 def valid(dataloader, model, loss_fn):
     size = len(dataloader.dataset)
     num_batches = len(dataloader)
@@ -81,12 +87,191 @@ def valid(dataloader, model, loss_fn):
 
     return correct, loss
 
+def get_dataset_name(file_name_with_dir):
+    filename_without_dir = file_name_with_dir.split('\\')[-1] #If you use windows change / with \\
+    temp = filename_without_dir.split('_')[:-1]
+    dataset_name = "_".join(temp)
+    return dataset_name
+
+class CustomDataset(Dataset):
+    def __init__(self, root_dir, file_extension='.h5'):
+        self.root_dir = root_dir
+        self.file_extension = file_extension
+        self.file_list = [file for file in os.listdir(root_dir) if file.endswith(file_extension)]
+        
+    def __len__(self):
+        return len(self.file_list)
+    
+    def __getitem__(self, idx):
+        file_path = os.path.join(self.root_dir, self.file_list[idx])
+        
+        with h5py.File(file_path, 'r') as file:
+            
+            dataset_name = get_dataset_name(file_path)
+            matrix = file.get(dataset_name)[()]
+            signals = torch.tensor(matrix, dtype=torch.float32)
+
+        if dataset_name.startswith('rest'):
+            target = torch.Tensor([1,0,0,0])
+        elif dataset_name.startswith('task_motor'):
+            target = torch.Tensor([0,1,0,0])
+        elif dataset_name.startswith('task_story_math'):
+            target = torch.Tensor([0,0,1,0])
+        elif dataset_name.startswith('task_working_memory'):
+            target = torch.Tensor([0,0,0,1])
+
+        return signals, target
+
 loss_fn = nn.CrossEntropyLoss()
-batch_size = 16 # Hyperparam?
+batch_size = 64 # Hyperparam?
 
 test_accs = []
 test_losses = []
 
+# Define your data directories
+train_data_dir = 'C:/Users/lazar/OneDrive/Υπολογιστής/test/Final Project data min_max_scaling segmented/Intra/train'
+test_data_dir = 'C:/Users/lazar/OneDrive/Υπολογιστής/test/Final Project data min_max_scaling segmented/Intra/test'
+
+# Create instances of the dataset
+train_dataset = CustomDataset(train_data_dir)
+test_dataset = CustomDataset(test_data_dir)
+
+# Create DataLoader instances
+train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+
+
+# initialize model
+model = EEGNet(chunk_size=160,
+            num_electrodes=248,
+            dropout=0.5, # Hyperparam? -> Consider changing it based on results
+            kernel_1=8, # Hyperparam 8, 16, 32
+            kernel_2=2, # Hyperparam 2, 4
+            F1=8, # Default 8, Hyperparam?
+            F2=16, # Default 16, Hyperparam?
+            D=2, # Default 2, Hyperparam?
+            num_classes=4).to(device)
+
+#model_summary = summary(model, (batch_size, 1, 248,160))
+
+# initialize optimizer
+optimizer = torch.optim.Adam(model.parameters(),
+                                lr=1e-3)  # official: weight_decay=5e-1
+#optimizer = torch.optim.SGD(model.parameters(),lr=1e-3)
+
+criterion = torch.nn.CrossEntropyLoss()
+
+num_epochs=50
+# Training loop
+for epoch in range(num_epochs):
+    avg_loss = 0
+    avg_acc = 0
+    i=0
+    for batch, target in tqdm(train_dataloader):
+        # Move the batch to the device (e.g., GPU)
+        
+        inputs = batch.to(device)
+        # Define new mean and std
+        new_mean = 0
+        new_std = 1
+
+        # Reshape the tensor for mean and std calculations
+        reshaped_tensor = inputs.view(-1, inputs.size(-1))
+
+        # Scale the tensor
+        scaled_tensor = (reshaped_tensor - torch.mean(reshaped_tensor)) / torch.std(reshaped_tensor) * new_std + new_mean
+
+        # Reshape the tensor back to its original shape
+        inputs = scaled_tensor.view(inputs.size())
+
+        inputs = inputs.unsqueeze(1)
+
+        # Forward pass
+        outputs = model(inputs)
+     
+        # Compute the loss
+        loss = criterion(outputs, target)  # You need to define 'target' based on your task
+        
+        # Step 1: Decode one-hot-encoded predictions and true labels
+        predicted_classes = torch.argmax(outputs, axis=1)
+        true_classes = torch.argmax(target, axis=1)
+
+        # Step 2: Compare predictions to true labels
+        correct_predictions = torch.sum(predicted_classes == true_classes).item()
+
+        # Step 3: Calculate accuracy
+        total_predictions = len(predicted_classes)
+        accuracy = correct_predictions / total_predictions
+        
+        avg_acc+=accuracy
+        avg_loss += loss
+        i+=1
+        #print(loss)
+        # Backward pass and optimization
+        optimizer.zero_grad()
+        loss.backward()
+        # Print gradients
+        '''
+        for name, param in model.named_parameters():
+            if param.grad is not None:
+                print(f'Parameter: {name}, Gradient: {param.grad}')
+        '''
+        optimizer.step()
+    print("AVERAGE LOSS :", avg_loss/i)
+    print("AVERAGE ACC :", avg_acc/i)
+
+    # Testing loop
+    model.eval()  # Set the model to evaluation mode
+    valid_loss = 0
+    valid_acc = 0
+    j=0
+    with torch.no_grad():
+        for batch, target in tqdm(test_dataloader):
+            # Move the batch to the device (e.g., GPU)
+        
+            inputs = batch.to(device)
+            # Define new mean and std
+            new_mean = 0
+            new_std = 1
+
+            # Reshape the tensor for mean and std calculations
+            reshaped_tensor = inputs.view(-1, inputs.size(-1))
+
+            # Scale the tensor
+            scaled_tensor = (reshaped_tensor - torch.mean(reshaped_tensor)) / torch.std(reshaped_tensor) * new_std + new_mean
+
+            # Reshape the tensor back to its original shape
+            inputs = scaled_tensor.view(inputs.size())
+
+            inputs = inputs.unsqueeze(1)
+
+            # Forward pass
+            outputs = model(inputs)
+        
+            # Compute the loss
+            loss = criterion(outputs, target)  # You need to define 'target' based on your task
+
+            # Step 1: Decode one-hot-encoded predictions and true labels
+            predicted_classes = torch.argmax(outputs, axis=1)
+            true_classes = torch.argmax(target, axis=1)
+
+            # Step 2: Compare predictions to true labels
+            correct_predictions = torch.sum(predicted_classes == true_classes).item()
+
+            # Step 3: Calculate accuracy
+            total_predictions = len(predicted_classes)
+            accuracy = correct_predictions / total_predictions
+            
+            valid_acc+=accuracy
+
+            valid_loss += loss
+            j+=1
+        print("TEST LOSS: -----", valid_loss/j)
+        print("TEST ACC: -----", valid_acc/j)
+    model.train()
+
+
+'''
 for i, (train_dataset, test_dataset) in enumerate(k_fold.split(dataset)):
     # initialize model
     model = EEGNet(chunk_size=32,
@@ -140,3 +325,4 @@ for i, (train_dataset, test_dataset) in enumerate(k_fold.split(dataset)):
 # log the average test result on cross-validation datasets
 logger.info(f"Test Error: \n Accuracy: {100*np.mean(test_accs):>0.1f}%, Avg loss: {np.mean(test_losses):>8f}")
 
+'''
