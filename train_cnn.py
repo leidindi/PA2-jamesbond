@@ -10,7 +10,7 @@ import time
 import logging
 import random
 import numpy as np
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader, Dataset, random_split
 import h5py
 from tqdm import tqdm
 from torchsummary import summary
@@ -41,9 +41,7 @@ def seed_everything(seed):
 
 seed_everything(42)
 
-k_fold = KFoldPerSubject(n_splits=10,
-                         split_path='./examples_vanilla_torch/split',
-                         shuffle=True)
+k_fold = KFoldPerSubject(n_splits=10, split_path='./examples_vanilla_torch/split', shuffle=True)
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -133,7 +131,7 @@ class CustomDataset(Dataset):
 
 
 loss_fn = nn.CrossEntropyLoss()
-batch_size = 64  # Hyperparam?, 1 for conv2d, 64 for conv1d
+batch_size = 80 # Hyperparam?, 1 for conv2d, 64 for conv1d
 
 test_accs = []
 test_losses = []
@@ -146,12 +144,24 @@ test_data_dir = '.\\Final Project data global_min_max_scaling segmented\\Intra\\
 train_dataset = CustomDataset(train_data_dir)
 test_dataset = CustomDataset(test_data_dir)
 
-# Create DataLoader instances
-train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+# Set the ratio of training to validation data (e.g., 80% training, 20% validation)
+train_ratio = 0.8
+train_size = int(train_ratio * len(train_dataset))
+val_size = len(train_dataset) - train_size
+
+# Use random_split to create training and validation subsets
+train_subset, val_subset = random_split(train_dataset, [train_size, val_size])
+
+# Create DataLoader instances for training and validation
+train_dataloader = DataLoader(train_subset, batch_size=batch_size, shuffle=True)
+test_dataloader = DataLoader(val_subset, batch_size=batch_size, shuffle=False)
+
+# Create DataLoader instances, ILLEGAL ONE
+#train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+#test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
 # initialize model
-dropout = 0.2
+dropout = 0.4
 kernel1 = 7
 kernel2 = 11
 model = CNN.CNN1D(kernel_size1=kernel1, kernel_size2=kernel2, dropout1=dropout)
@@ -176,8 +186,8 @@ if cnn2d:
 # model_summary = summary(model, (batch_size, 1, 248,160))
 
 # initialize optimizer
-learning_rate = 1e-5
-weight_decay = 5e-6
+learning_rate = 1e-4
+weight_decay = 1e-5
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate,
                              weight_decay=weight_decay)  # , weight_decay=5e-5)  # official: weight_decay=5e-1
 # optimizer = torch.optim.SGD(model.parameters(),lr=1e-3)
@@ -186,7 +196,8 @@ criterion = torch.nn.CrossEntropyLoss()
 
 averages_train = []
 averages_test = []
-num_epochs = 200
+num_epochs = 50
+max_acc = 0.8
 # Training loop
 for epoch in range(num_epochs):
     avg_loss = 0
@@ -255,7 +266,7 @@ for epoch in range(num_epochs):
     print("\n" * 30)
     print("AVERAGE LOSS :", avg_loss / i)
     print("AVERAGE ACC :", avg_acc / i)
-
+    print(f'EPOCH :{(epoch/num_epochs)*100:.02f}%')
     averages_train.append(avg_acc / i)
 
     # Testing loop
@@ -308,15 +319,29 @@ for epoch in range(num_epochs):
         print("TEST LOSS: -----", valid_loss / j)
         print("TEST ACC: -----", valid_acc / j)
         averages_test.append(valid_acc / j)
+
+        file_path = "cnn_intra.pkl"
+
+        # Check if the file exists before attempting to delete it
+        if valid_acc/j > max_acc:
+            try:
+                # Attempt to delete the file
+                os.remove(file_path)
+                print(f"The file {file_path} has been successfully deleted.")
+            except Exception as e:
+                print(f"An error occurred while trying to delete the file: {e}")
+            with open('cnn_intra.pkl', 'wb') as f:
+                pickle.dump(model, f)
+            print(f'New model has been saved with accuracy {(valid_acc / j):.3f} on the validation set')
+            max_acc = valid_acc / j
+
     model.train()
 
 plt.plot(range(0, len(averages_train)), averages_train, label="Training averages")
 plt.plot(range(0, len(averages_test)), averages_test, label="Test averages")
 plt.legend()
-plt.title(
-    f'LR:{learning_rate:.02f},WD:{weight_decay:.02f},kernel1:{kernel1},kernel2:{kernel2},Drop:{dropout:.02f},BSz{batch_size}')
+plt.title(f'LR:{str(learning_rate)},WD:{str(weight_decay)},kernel1:{kernel1},kernel2:{kernel2},Drop:{dropout:.02f},BSz{batch_size}')
 plt.show()
-print()
 '''
 for i, (train_dataset, test_dataset) in enumerate(k_fold.split(dataset)):
     # initialize model
@@ -370,9 +395,4 @@ for i, (train_dataset, test_dataset) in enumerate(k_fold.split(dataset)):
 
 # log the average test result on cross-validation datasets
 logger.info(f"Test Error: \n Accuracy: {100*np.mean(test_accs):>0.1f}%, Avg loss: {np.mean(test_losses):>8f}")
-
 '''
-
-if input("save model?") == "y":
-    with open('cnn_intra.pkl', 'wb') as f:
-        pickle.dump(model, f)

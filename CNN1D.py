@@ -115,14 +115,14 @@ class CNN1D(nn.Module):
         self.kernel_size1 = kernel_size1
         self.kernel_size2 = kernel_size2
 
-        self.cv1d_1_image = nn.Conv1d(160,   160 , kernel_size=(self.kernel_size1))#, stride = kernel_size1//3)
-        self.cv1d_2_image = nn.Conv1d(160,   160 , kernel_size=(self.kernel_size1))#, stride = kernel_size1//3)
-        self.cv1d_3_image = nn.Conv1d(160,   160 , kernel_size=(self.kernel_size1))#, stride = kernel_size1//3)
+        self.cv1d_1_image = nn.Conv1d(160,   320 , kernel_size=(self.kernel_size1))#, stride = kernel_size1//3)
+        self.cv1d_2_image = nn.Conv1d(320,   240 , kernel_size=(self.kernel_size1))#, stride = kernel_size1//3)
+        self.cv1d_3_image = nn.Conv1d(240,   160 , kernel_size=(self.kernel_size1))#, stride = kernel_size1//3)
 
 
-        self.cv1d_4_time = nn.Conv1d(25,                25 , kernel_size=(self.kernel_size2))#, stride = kernel_size2//3)
-        self.cv1d_5_time = nn.Conv1d(25,                25 , kernel_size=(self.kernel_size2))#, stride = kernel_size2//3)
-        self.cv1d_6_time = nn.Conv1d(25,                25 , kernel_size=(self.kernel_size2))#, stride = kernel_size2//3)
+        self.cv1d_4_time = nn.Conv1d(25,                100, kernel_size=(self.kernel_size2))#, stride = kernel_size2//3)
+        self.cv1d_5_time = nn.Conv1d(100,                100, kernel_size=(self.kernel_size2))#, stride = kernel_size2//3)
+        self.cv1d_6_time = nn.Conv1d(100,                25, kernel_size=(self.kernel_size2))#, stride = kernel_size2//3)
 
         #self.self_attention = SelfAttention(in_channels, hidden_dim)
         self.fc_1 = nn.Linear(25, 25)
@@ -132,37 +132,45 @@ class CNN1D(nn.Module):
         #self.dropout2 = nn.Dropout(dropout1)
         self.fc_4 = nn.Linear(15, self.num_classes)
 
-        self.norm = nn.BatchNorm1d(160)
+        self.norm320 = nn.BatchNorm1d(320)
+        self.norm240 = nn.BatchNorm1d(240)
+        self.norm160 = nn.BatchNorm1d(160)
+        self.norm100 = nn.BatchNorm1d(100)
+        self.norm25 = nn.BatchNorm1d(25)
 
     def forward(self, x):
 
         x = torch.permute(x,(0,2,1))
 
         x = self.cv1d_1_image(x)
+        x = self.norm320(x)
         x = F.relu(x)
         x = F.max_pool1d(x, 2)
 
         x = self.cv1d_2_image(x)
+        x = self.norm240(x)
         x = F.relu(x)
         x = F.max_pool1d(x, 2)
 
         x = self.cv1d_3_image(x)
+        x = self.norm160(x)
         x = F.relu(x)
         x = F.max_pool1d(x, 2)
-
-        x = self.norm(x)
 
         x = torch.permute(x,(0,2,1))
 
         x = self.cv1d_4_time(x)
+        x = self.norm100(x)
         x = F.relu(x)
         x = F.max_pool1d(x, 4)
 
         x = self.cv1d_5_time(x)
+        x = self.norm100(x)
         x = F.relu(x)
         x = F.max_pool1d(x, 2)
 
-        x = self.cv1d_5_time(x)
+        x = self.cv1d_6_time(x)
+        x = self.norm25(x)
         x = F.relu(x)
         x = F.max_pool1d(x, x.shape[2])
 
