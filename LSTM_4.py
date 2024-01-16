@@ -59,12 +59,13 @@ test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
 # AttentionLSTM model with attention mechanism
 class AttentionLSTM(nn.Module):
-    def __init__(self, input_size, hidden_size, output_size, num_layers=3):
+    def __init__(self, input_size, hidden_size, output_size, num_layers, dropout_rate):
         super(AttentionLSTM, self).__init__()
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True)
         self.query_layer = nn.Linear(hidden_size, hidden_size)
         self.fc = nn.Linear(hidden_size, output_size)
         self.softmax = nn.Softmax(dim=1)
+        self.dropout = nn.Dropout(p=dropout_rate)
 
     def forward(self, x):
         lstm_out, _ = self.lstm(x)
@@ -81,6 +82,9 @@ class AttentionLSTM(nn.Module):
         # Weighted sum of LSTM output
         attended_output = torch.sum(lstm_out * attention_weights.unsqueeze(2), dim=1)
 
+        # Dropout before the fully connected layer
+        attended_output = self.dropout(attended_output)
+
         # Final output
         output = self.fc(attended_output)
 
@@ -88,17 +92,17 @@ class AttentionLSTM(nn.Module):
 
 # Instantiate the model
 input_size = 248  # Number of sensors
-hidden_size = 128  # Hidden state size of LSTM
+hidden_size = 32  # Hidden state size of LSTM
 output_size = 4  # Number of classes
-num_layers = 3  # Number of LSTM layers
-model = AttentionLSTM(input_size, hidden_size, output_size, num_layers)
+num_layers = 2  # Number of LSTM layers
+model = AttentionLSTM(input_size, hidden_size, output_size, num_layers, dropout_rate=0.4)
 
 # Loss and optimizer
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=0.0001)
+optimizer = optim.Adam(model.parameters(), lr=0.00005, weight_decay=1e-5)
 
 # Training
-num_epochs = 50
+num_epochs = 15
 accuracy_train_history = []
 accuracy_test_history = []
 

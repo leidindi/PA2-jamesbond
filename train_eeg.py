@@ -129,8 +129,8 @@ test_accs = []
 test_losses = []
 
 # Define your data directories
-train_data_dir = 'C:/Users/lazar/OneDrive/Υπολογιστής/test/Final Project data min_max_scaling segmented/Intra/train'
-test_data_dir = 'C:/Users/lazar/OneDrive/Υπολογιστής/test/Final Project data min_max_scaling segmented/Intra/test'
+train_data_dir = 'C:/Users/lazar/OneDrive/Υπολογιστής/test/Final Project data min_max_scaling segmented/Cross/train'
+test_data_dir = 'C:/Users/lazar/OneDrive/Υπολογιστής/test/Final Project data min_max_scaling segmented/Cross/test1'
 
 # Create instances of the dataset
 train_dataset = CustomDataset(train_data_dir)
@@ -185,7 +185,7 @@ for epoch in range(num_epochs):
         inputs = scaled_tensor.view(inputs.size())
 
         inputs = inputs.unsqueeze(1)
-
+        
         # Forward pass
         outputs = model(inputs)
      
