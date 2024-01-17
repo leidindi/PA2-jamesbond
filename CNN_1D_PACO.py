@@ -44,8 +44,8 @@ class CustomDataset(Dataset):
         return signals, target
 
 # Define your data directories
-train_data_dir = '/Users/iacopoermacora/Final Project data global_min_max_scaling segmented/Intra/train'
-test_data_dir = '/Users/iacopoermacora/Final Project data global_min_max_scaling segmented/Intra/test'
+train_data_dir = '/Users/iacopoermacora/Final Project data dragon/Cross/train'
+test_data_dir = '/Users/iacopoermacora/Final Project data dragon/Cross/test1'
 
 # Create instances of the dataset
 train_dataset = CustomDataset(train_data_dir)
@@ -62,21 +62,21 @@ class MEG_CNN1D(nn.Module):
         super(MEG_CNN1D, self).__init__()
         
         # First Convolutional Layer
-        self.conv1 = nn.Conv1d(in_channels=248, out_channels=64, kernel_size=20, stride=1, padding=1)
+        self.conv1 = nn.Conv1d(in_channels=248, out_channels=64, kernel_size=15, stride=1, padding=1)
         self.batch_norm1 = nn.BatchNorm1d(64)
         self.threshold1 = nn.ReLU()
         self.dropout1 = nn.Dropout(dropout_rate)
         self.pool1 = nn.MaxPool1d(kernel_size=2, stride=2)
 
         # Second Convolutional Layer
-        self.conv2 = nn.Conv1d(in_channels=64, out_channels=32, kernel_size=10, stride=1, padding=1)
-        self.batch_norm2 = nn.BatchNorm1d(32)
+        self.conv2 = nn.Conv1d(in_channels=64, out_channels=16, kernel_size=5, stride=1, padding=1)
+        self.batch_norm2 = nn.BatchNorm1d(16)
         self.threshold2 = nn.ReLU()
         self.dropout2 = nn.Dropout(dropout_rate)
         self.pool2 = nn.MaxPool1d(kernel_size=2, stride=2)
 
         # Fully Connected Layer
-        self.fc1 = nn.Linear(1024, 128)  # Adjust the input size based on your data dimensions
+        self.fc1 = nn.Linear(576, 128)  # Adjust the input size based on your data dimensions
         self.fc2 = nn.Linear(128, 4)  # Adjust the output size based on your task
 
     def forward(self, x):
@@ -100,7 +100,7 @@ class MEG_CNN1D(nn.Module):
 
         # Reshape before fully connected layer
         # x = x.view(-1, 16 * 40)  # Adjust the size based on your data dimensions
-        x = x.reshape((-1, 32*32))
+        x = x.reshape((-1, 16*36))
 
         # Fully Connected Layers
         x = self.fc1(x)
@@ -116,7 +116,7 @@ criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.00001, weight_decay=1e-6)
 
 # Training
-num_epochs = 15
+num_epochs = 300
 output_size = 4
 accuracy_train_history = []
 accuracy_test_history = []
