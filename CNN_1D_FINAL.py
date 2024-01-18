@@ -12,6 +12,13 @@ from tqdm import tqdm
 import re
 import pandas as pd
 
+val_prefixes = [
+    'rest_105923_1',
+    'task_motor_105923_2',
+    'task_story_math_105923_3',
+    'task_working_memory_105923_4'
+]
+
 def get_dataset_name(file_name_with_dir):
     filename_without_dir = file_name_with_dir.split('/')[-1] #If you use windows change / with \\
     temp = filename_without_dir.split('_')[:-1]
@@ -34,10 +41,12 @@ class TrainDataset(Dataset):
         self.root_dir = root_dir
         self.file_extension = file_extension
         self.file_list = [file for file in os.listdir(root_dir) if file.endswith(file_extension)]
-        for file in self.file_list:
-            if file.startswith('rest_105923_1') or file.startswith('task_motor_105923_2') or file.startswith('task_story_math_105923_3') or file.startswith('task_working_memory_105923_4 '):
-                self.file_list.remove(file)
+        print(len(self.file_list))
+
+        self.file_list = [file for file in self.file_list if not any(file.startswith(prefix) for prefix in val_prefixes)]
         
+        print(len(self.file_list))
+
         # Extract keys without the "_segment_number" part
         self.keys = list(set(filename.split('_segment')[0] for filename in self.file_list))
         
@@ -75,9 +84,11 @@ class ValDataset(Dataset):
         self.root_dir = root_dir
         self.file_extension = file_extension
         self.file_list = [file for file in os.listdir(root_dir) if file.endswith(file_extension)]
-        for file in self.file_list:
-            if not file.startswith('rest_105923_1') or not file.startswith('task_motor_105923_2') or not file.startswith('task_story_math_105923_3') or not file.startswith('task_working_memory_105923_4'):
-                self.file_list.remove(file)
+        print(len(self.file_list))
+
+        self.file_list = [file for file in self.file_list if any(file.startswith(prefix) for prefix in val_prefixes)]
+        
+        print(len(self.file_list))
         
         # Extract keys without the "_segment_number" part
         self.keys = list(set(filename.split('_segment')[0] for filename in self.file_list))
@@ -152,8 +163,8 @@ class TestDataset(Dataset):
         return signals, target, item_key
 
 # Define your data directories
-train_data_dir = '/Users/iacopoermacora/Final Project data dragon no artifacts/Intra/train'
-test_data_dir = '/Users/iacopoermacora/Final Project data dragon no artifacts/Intra/test'
+train_data_dir = '/Users/iacopoermacora/Final Dataset/Intra/train'
+test_data_dir = '/Users/iacopoermacora/Final Dataset/Intra/test'
 
 # Create instances of the dataset
 train_dataset = TrainDataset(train_data_dir)
