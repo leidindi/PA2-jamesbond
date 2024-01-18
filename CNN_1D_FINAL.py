@@ -412,7 +412,7 @@ for epoch in range(num_epochs):
                 class_correct_test[i] += ((predicted_test == i) & (targets[:, i] == 1)).sum().item()
             
             for idx, file in enumerate(key_name):
-                    train_dataset.df.loc[train_dataset.df['FileNames'] == file, 'Values'].iloc[0].append(torch.argmax(outputs, dim=1)[idx].item())
+                test_dataset.df.loc[test_dataset.df['FileNames'] == file, 'Values'].iloc[0].append(torch.argmax(outputs, dim=1)[idx].item())
 
     test_accuracy = total_correct_test / total_samples_test
     print(f'Test Accuracy: {test_accuracy}')
