@@ -546,6 +546,7 @@ plt.ylabel('Accuracy')
 plt.legend()
 
 # Plot the accuracy improvement
+plt.figure()  # Create a new figure for the second plot
 plt.plot(range(1, num_epochs + 1), maj_accuracy_train_history, marker='o', label='Training (Majority label)')
 plt.plot(range(1, num_epochs + 1), maj_accuracy_val_history, marker='o', label='Validating (Majority label)')
 plt.plot(range(1, num_epochs + 1), maj_accuracy_test_history, marker='o', label='Testing (Majority label)')
@@ -555,6 +556,7 @@ plt.ylabel('Accuracy')
 plt.legend()
 
 # Plot the accuracy improvement
+plt.figure()  # Create a new figure for the second plot
 plt.plot(range(1, num_epochs + 1), accuracy_train_history, marker='o', label='Training')
 plt.plot(range(1, num_epochs + 1), accuracy_val_history, marker='o', label='Validating')
 plt.plot(range(1, num_epochs + 1), accuracy_test_history, marker='o', label='Testing')
