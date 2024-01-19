@@ -275,12 +275,17 @@ criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.00001, weight_decay=1e-6)
 
 # Training
-num_epochs = 7
+num_epochs = 2
 output_size = 4
 # Number of best accuracies to keep track of
 num_best_accuracies = 5
-best_validation_accuracies = np.zeros(num_best_accuracies)
-best_validation_accuracies_epoch = np.zeros(num_best_accuracies)
+best_train_accuracies = np.zeros(num_best_accuracies)
+best_val_accuracies = np.zeros(num_best_accuracies)
+best_test_accuracies = np.zeros(num_best_accuracies)
+best_maj_train_accuracies = np.zeros(num_best_accuracies)
+best_maj_val_accuracies = np.zeros(num_best_accuracies)
+best_maj_test_accuracies = np.zeros(num_best_accuracies)
+best_epoch = np.zeros(num_best_accuracies)
 
 accuracy_train_history = []
 accuracy_val_history = []
@@ -349,8 +354,8 @@ for epoch in range(num_epochs):
     
     
     train_dataset.df = pd.DataFrame({'FileNames': train_dataset.keys, 'Values': [[] for _ in range(len(train_dataset.keys))]})
-    average_epoch_accuracy = unsegmented_average_accuracy/counter
-    print("REAL SHIT IS HERE (TRAIN): ", average_epoch_accuracy)
+    average_epoch_accuracy_train = unsegmented_average_accuracy/counter
+    print("MAJORITY (TRAIN): ", average_epoch_accuracy_train)
     #train_dataset.df.loc[train_dataset.df['FileNames'] == key_name, 'Values'].iloc[0].append(train_dataset)
 
     # Print class-wise accuracy
@@ -359,22 +364,14 @@ for epoch in range(num_epochs):
         print(f'Training Class {i} Accuracy: {class_accuracy}  | Total tests: {class_total_train[i]}')
 
     accuracy_train_history.append(train_accuracy)
-    maj_accuracy_train_history.append(average_epoch_accuracy)
+    maj_accuracy_train_history.append(average_epoch_accuracy_train)
     loss_train_history.append(train_loss)
-
-    # Find the index of the lowest value in the array
-    lowest_index = np.argmin(best_validation_accuracies)
-
-    # Check if the number_to_check is higher than the lowest value
-    if train_accuracy > best_validation_accuracies[lowest_index]:
-        # Update the array with the new value
-        best_validation_accuracies[lowest_index] = train_accuracy
-        best_validation_accuracies_epoch[lowest_index] = epoch+1
 
     # Validating
     model.eval()
     total_correct_val = 0
     total_samples_val = 0
+    total_loss_val = 0
     class_correct_val = [0] * output_size
     class_total_val = [0] * output_size
 
@@ -382,9 +379,11 @@ for epoch in range(num_epochs):
         for signals, targets, key_name in val_dataloader:
 
             outputs = model(signals)
+            loss = criterion(outputs, torch.argmax(targets, dim=1))
             _, predicted_val = torch.max(outputs, 1)
             total_samples_val += targets.size(0)
             total_correct_val += (predicted_val == torch.argmax(targets, dim=1)).sum().item()
+            total_loss_val += loss.item()
 
             # Calculate class-wise accuracy
             for i in range(output_size):
@@ -395,7 +394,9 @@ for epoch in range(num_epochs):
                 val_dataset.df.loc[val_dataset.df['FileNames'] == file, 'Values'].iloc[0].append(torch.argmax(outputs, dim=1)[idx].item())
 
     val_accuracy = total_correct_val / total_samples_val
+    val_loss = total_loss_val / total_samples_train
     print(f'Val Accuracy: {val_accuracy}')
+    print(f'Val Loss: {val_loss}')
 
     unsegmented_average_accuracy = 0
     counter = 0
@@ -420,8 +421,8 @@ for epoch in range(num_epochs):
     
     
     val_dataset.df = pd.DataFrame({'FileNames': val_dataset.keys, 'Values': [[] for _ in range(len(val_dataset.keys))]})
-    average_epoch_accuracy = unsegmented_average_accuracy/counter
-    print("REAL SHIT IS HERE (VAL): ", average_epoch_accuracy)
+    average_epoch_accuracy_val = unsegmented_average_accuracy/counter
+    print("MAJORITY (VAL): ", average_epoch_accuracy_val)
     #val_dataset.df.loc[val_dataset.df['FileNames'] == key_name, 'Values'].iloc[0].append(val_accuracy)
 
     # Print class-wise accuracy for validation
@@ -430,12 +431,14 @@ for epoch in range(num_epochs):
         print(f'Val Class {i} Accuracy: {class_accuracy} | Total tests: {class_total_val[i]}')
 
     accuracy_val_history.append(val_accuracy)
-    maj_accuracy_val_history.append(average_epoch_accuracy)
+    maj_accuracy_val_history.append(average_epoch_accuracy_val)
+    loss_val_history.append(val_loss)
 
     # Testing
     model.eval()
     total_correct_test = 0
     total_samples_test = 0
+    total_loss_test = 0
     class_correct_test = [0] * output_size
     class_total_test = [0] * output_size
 
@@ -443,9 +446,11 @@ for epoch in range(num_epochs):
         for signals, targets, key_name in test_dataloader:
 
             outputs = model(signals)
+            loss = criterion(outputs, torch.argmax(targets, dim=1))
             _, predicted_test = torch.max(outputs, 1)
             total_samples_test += targets.size(0)
             total_correct_test += (predicted_test == torch.argmax(targets, dim=1)).sum().item()
+            total_loss_test += loss.item()
 
             # Calculate class-wise accuracy
             for i in range(output_size):
@@ -456,7 +461,9 @@ for epoch in range(num_epochs):
                 test_dataset.df.loc[test_dataset.df['FileNames'] == file, 'Values'].iloc[0].append(torch.argmax(outputs, dim=1)[idx].item())
 
     test_accuracy = total_correct_test / total_samples_test
+    test_loss = total_loss_test / total_samples_train
     print(f'Test Accuracy: {test_accuracy}')
+    print(f'Test Loss: {test_loss}')
 
     unsegmented_average_accuracy = 0
     counter = 0
@@ -481,8 +488,8 @@ for epoch in range(num_epochs):
 
 
     test_dataset.df = pd.DataFrame({'FileNames': test_dataset.keys, 'Values': [[] for _ in range(len(test_dataset.keys))]})
-    average_epoch_accuracy = unsegmented_average_accuracy/counter
-    print("REAL SHIT IS HERE (TEST): ", average_epoch_accuracy)
+    average_epoch_accuracy_test = unsegmented_average_accuracy/counter
+    print("MAJORITY (TEST): ", average_epoch_accuracy_test)
     #test_dataset.df.loc[test_dataset.df['FileNames'] == key_name, 'Values'].iloc[0].append(test_dataset)
 
     # Print class-wise accuracy for testing
@@ -491,19 +498,67 @@ for epoch in range(num_epochs):
         print(f'Test Class {i} Accuracy: {class_accuracy} | Total tests: {class_total_test[i]}')
     
     accuracy_test_history.append(test_accuracy)
-    maj_accuracy_test_history.append(average_epoch_accuracy)
+    maj_accuracy_test_history.append(average_epoch_accuracy_test)
+    loss_test_history.append(test_loss)
+
+    # Find the index of the lowest value in the array
+    lowest_index = np.argmin(best_val_accuracies)
+
+    # Check if the number_to_check is higher than the lowest value
+    if train_accuracy > best_val_accuracies[lowest_index]:
+        # Update the array with the new value
+        best_train_accuracies[lowest_index] = val_accuracy
+        best_maj_train_accuracies[lowest_index] = average_epoch_accuracy_train
+        best_val_accuracies[lowest_index] = val_accuracy
+        best_maj_val_accuracies[lowest_index] = average_epoch_accuracy_val
+        best_test_accuracies[lowest_index] = test_accuracy
+        best_maj_test_accuracies[lowest_index] = average_epoch_accuracy_test
+        best_epoch[lowest_index] = epoch+1
 
 print("The 5 best train accuracies:")
 for i in range(0, 5):
-    print("Epoch ", best_validation_accuracies_epoch[i], ": Val = ", best_validation_accuracies[i])
+    print("Epoch ", best_epoch[i], ":")
+    print("Train = ", best_train_accuracies[i])
+    print("Val = ", best_val_accuracies[i])
+    print("Test = ", best_test_accuracies[i])
+    print("Train (maj) = ", best_maj_train_accuracies[i])
+    print("Val (maj) = ", best_maj_val_accuracies[i])
+    print("Test (maj) = ", best_maj_test_accuracies[i])
+    print("---------------------------------------------------")
+print("Average best train accuracy: ", sum(best_train_accuracies) / len(best_train_accuracies))
+print("Average best val accuracy: ", sum(best_val_accuracies) / len(best_val_accuracies))
+print("Average best test accuracy: ", sum(best_test_accuracies) / len(best_test_accuracies))
+print("Average best train (maj) accuracy: ", sum(best_maj_train_accuracies) / len(best_maj_train_accuracies))
+print("Average best val (maj) accuracy: ", sum(best_maj_val_accuracies) / len(best_maj_val_accuracies))
+print("Average best test (maj) accuracy: ", sum(best_maj_test_accuracies) / len(best_maj_test_accuracies))
+
+
 # Plot the accuracy improvement
 plt.plot(range(1, num_epochs + 1), accuracy_train_history, marker='o', label='Training')
 plt.plot(range(1, num_epochs + 1), accuracy_val_history, marker='o', label='Validating')
 plt.plot(range(1, num_epochs + 1), accuracy_test_history, marker='o', label='Testing')
-plt.plot(range(1, num_epochs + 1), maj_accuracy_test_history, marker='o', label='Training (Majority label)')
-plt.plot(range(1, num_epochs + 1), maj_accuracy_test_history, marker='o', label='Validating (Majority label)')
+plt.plot(range(1, num_epochs + 1), maj_accuracy_train_history, marker='o', label='Training (Majority label)')
+plt.plot(range(1, num_epochs + 1), maj_accuracy_val_history, marker='o', label='Validating (Majority label)')
 plt.plot(range(1, num_epochs + 1), maj_accuracy_test_history, marker='o', label='Testing (Majority label)')
 plt.title('Accuracy Improvement Over Epochs')
+plt.xlabel('Epoch')
+plt.ylabel('Accuracy')
+plt.legend()
+
+# Plot the accuracy improvement
+plt.plot(range(1, num_epochs + 1), maj_accuracy_train_history, marker='o', label='Training (Majority label)')
+plt.plot(range(1, num_epochs + 1), maj_accuracy_val_history, marker='o', label='Validating (Majority label)')
+plt.plot(range(1, num_epochs + 1), maj_accuracy_test_history, marker='o', label='Testing (Majority label)')
+plt.title('Accuracy Improvement Over Epochs (ONLY MAJORITY)')
+plt.xlabel('Epoch')
+plt.ylabel('Accuracy')
+plt.legend()
+
+# Plot the accuracy improvement
+plt.plot(range(1, num_epochs + 1), accuracy_train_history, marker='o', label='Training')
+plt.plot(range(1, num_epochs + 1), accuracy_val_history, marker='o', label='Validating')
+plt.plot(range(1, num_epochs + 1), accuracy_test_history, marker='o', label='Testing')
+plt.title('Accuracy Improvement Over Epochs (ONLY SEGMENTS)')
 plt.xlabel('Epoch')
 plt.ylabel('Accuracy')
 plt.legend()
