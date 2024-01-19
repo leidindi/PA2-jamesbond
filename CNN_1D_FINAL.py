@@ -28,7 +28,7 @@ val_prefixes = [
 ]
 
 def get_dataset_name(file_name_with_dir):
-    filename_without_dir = file_name_with_dir.split('/')[-1] #If you use windows change / with \\
+    filename_without_dir = file_name_with_dir.split('\\')[-1] #If you use windows change / with \\
     temp = filename_without_dir.split('_')[:-1]
     dataset_name = "_".join(temp)
     return dataset_name
@@ -171,8 +171,8 @@ class TestDataset(Dataset):
         return signals, target, item_key
 
 # Define your data directories
-train_data_dir = '/Users/iacopoermacora/New Final Dataset/Cross/train'
-test_data_dir = '/Users/iacopoermacora/New Final Dataset/Cross/test'
+train_data_dir = 'C:/Users/lazar/OneDrive/Υπολογιστής/test/Final Project data dragon no artifacts/Cross/train'
+test_data_dir = 'C:/Users/lazar/OneDrive/Υπολογιστής/test/Final Project data dragon no artifacts/Cross/test'
 
 if "Cross" in test_data_dir:
     start = 0
@@ -286,8 +286,8 @@ class Layer_param:
         self.stride = stride
         self.padding = padding
 
-layer_one = Layer_param(247, 64, 15, 1, 1) # in_channels, out_channels, kernel_size, stride, padding
-layer_two = Layer_param(64, 16, 5, 1, 1) # in_channels, out_channels, kernel_size, stride, padding
+layer_one = Layer_param(247, 32, 15, 1, 1) # in_channels, out_channels, kernel_size, stride, padding
+layer_two = Layer_param(32, 8, 5, 1, 1) # in_channels, out_channels, kernel_size, stride, padding
 dropout_rate = 0.5
 
 # after_convolv = 160-((kernel_size-1)-2*padding) #consider that stride is unchanged as 1
@@ -300,10 +300,10 @@ model = MEG_CNN1D(layer_one, layer_two, dropout_rate)
 
 # Loss and optimizer
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=0.00001, weight_decay=1e-6)
+optimizer = optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5)
 
 # Training
-num_epochs = 2
+num_epochs = 150
 output_size = 4
 # Number of best accuracies to keep track of
 num_best_accuracies = 5
@@ -465,7 +465,9 @@ for epoch in range(num_epochs):
     accuracy_val_history.append(val_accuracy)
     maj_accuracy_val_history.append(average_epoch_accuracy_val)
     loss_val_history.append(val_loss)
-    
+    test_accuracy = np.zeros(3)
+    average_epoch_accuracy_test = np.zeros(3)
+
     for n_dataset in range(start, finish):
         # Testing
         model.eval()
@@ -494,9 +496,9 @@ for epoch in range(num_epochs):
                 for idx, file in enumerate(key_name):
                     test_datasets[n_dataset].df.loc[test_datasets[n_dataset].df['FileNames'] == file, 'Values'].iloc[0].append(torch.argmax(outputs, dim=1)[idx].item())
 
-        test_accuracy = total_correct_test / total_samples_test
+        test_accuracy[n_dataset] = total_correct_test / total_samples_test
         test_loss = total_loss_test / batches_counter
-        print(f'Test {n_dataset+1} Accuracy: {test_accuracy}')
+        print(f'Test {n_dataset+1} Accuracy: {test_accuracy[n_dataset]}')
         print(f'Test {n_dataset+1} Loss: {test_loss}')
 
         unsegmented_average_accuracy = 0
@@ -522,8 +524,8 @@ for epoch in range(num_epochs):
 
 
         test_datasets[n_dataset].df = pd.DataFrame({'FileNames': test_datasets[n_dataset].keys, 'Values': [[] for _ in range(len(test_datasets[n_dataset].keys))]})
-        average_epoch_accuracy_test = unsegmented_average_accuracy/counter
-        print("MAJORITY (TEST ", n_dataset+1, ": ", average_epoch_accuracy_test)
+        average_epoch_accuracy_test[n_dataset] = unsegmented_average_accuracy/counter
+        print("MAJORITY (TEST ", n_dataset+1, ": ", average_epoch_accuracy_test[n_dataset])
         #test_dataset.df.loc[test_dataset.df['FileNames'] == key_name, 'Values'].iloc[0].append(test_dataset)
 
         # Print class-wise accuracy for testing
@@ -531,8 +533,8 @@ for epoch in range(num_epochs):
             class_accuracy = class_correct_test[i] / class_total_test[i]
             print(f'Test {n_dataset+1} Class {i} Accuracy: {class_accuracy} | Total tests: {class_total_test[i]}')
         
-        accuracy_test_histories[n_dataset].append(test_accuracy)
-        maj_accuracy_test_histories[n_dataset].append(average_epoch_accuracy_test)
+        accuracy_test_histories[n_dataset].append(test_accuracy[n_dataset])
+        maj_accuracy_test_histories[n_dataset].append(average_epoch_accuracy_test[n_dataset])
         loss_test_histories[n_dataset].append(test_loss)
 
     # Find the index of the lowest value in the array
@@ -546,8 +548,8 @@ for epoch in range(num_epochs):
         best_val_accuracies[lowest_index] = val_accuracy
         best_maj_val_accuracies[lowest_index] = average_epoch_accuracy_val
         for n_dataset in range(start, finish):
-            best_test_accuracies[n_dataset][lowest_index] = test_accuracy
-            best_maj_test_accuracies[n_dataset][lowest_index] = average_epoch_accuracy_test
+            best_test_accuracies[n_dataset][lowest_index] = test_accuracy[n_dataset]
+            best_maj_test_accuracies[n_dataset][lowest_index] = average_epoch_accuracy_test[n_dataset]
         best_epoch[lowest_index] = epoch+1
 
 print("The 5 best val accuracies:")
@@ -618,3 +620,5 @@ plt.xlabel('Epoch')
 plt.ylabel('Loss')
 plt.legend()
 plt.show()
+
+print('end')
