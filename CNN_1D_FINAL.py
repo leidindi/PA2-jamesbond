@@ -14,9 +14,17 @@ import pandas as pd
 
 val_prefixes = [
     'rest_105923_1',
-    'task_motor_105923_2',
-    'task_story_math_105923_3',
-    'task_working_memory_105923_4'
+    'task_motor_105923_1',
+    'task_story_math_105923_1',
+    'task_working_memory_105923_1',
+    'rest_113922_1',
+    'rest_164636_2',
+    'task_motor_113922_1',
+    'task_motor_164436_2',
+    'task_story_math_113922_1',
+    'task_story_math_164636_2',
+    'task_working_memory_113922_1',
+    'task_working_memory_164636_2'
 ]
 
 def get_dataset_name(file_name_with_dir):
@@ -163,8 +171,8 @@ class TestDataset(Dataset):
         return signals, target, item_key
 
 # Define your data directories
-train_data_dir = '/Users/iacopoermacora/Final Dataset/Intra/train'
-test_data_dir = '/Users/iacopoermacora/Final Dataset/Intra/test'
+train_data_dir = '/Users/iacopoermacora/New Final Dataset/Intra/train'
+test_data_dir = '/Users/iacopoermacora/New Final Dataset/Intra/test'
 
 # Create instances of the dataset
 train_dataset = TrainDataset(train_data_dir)
@@ -267,20 +275,29 @@ criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.00001, weight_decay=1e-6)
 
 # Training
-num_epochs = 150
+num_epochs = 7
 output_size = 4
+# Number of best accuracies to keep track of
+num_best_accuracies = 5
+best_validation_accuracies = np.zeros(num_best_accuracies)
+best_validation_accuracies_epoch = np.zeros(num_best_accuracies)
+
 accuracy_train_history = []
 accuracy_val_history = []
 accuracy_test_history = []
 maj_accuracy_train_history = []
 maj_accuracy_val_history = []
 maj_accuracy_test_history = []
+loss_train_history = []
+loss_val_history = []
+loss_test_history = []
 
 for epoch in range(num_epochs):
     print(f"Epoch {epoch + 1}/{num_epochs}")
     model.train()
     total_correct_train = 0
     total_samples_train = 0
+    total_loss_train = 0
     class_correct_train = [0] * output_size
     class_total_train = [0] * output_size
 
@@ -294,6 +311,7 @@ for epoch in range(num_epochs):
         _, predicted_train = torch.max(outputs, 1)
         total_samples_train += targets.size(0)
         total_correct_train += (predicted_train == torch.argmax(targets, dim=1)).sum().item()
+        total_loss_train += loss.item()
 
         # Calculate class-wise accuracy
         for i in range(output_size):
@@ -304,7 +322,9 @@ for epoch in range(num_epochs):
                 train_dataset.df.loc[train_dataset.df['FileNames'] == file, 'Values'].iloc[0].append(torch.argmax(outputs, dim=1)[idx].item())
 
     train_accuracy = total_correct_train / total_samples_train
+    train_loss = total_loss_train / total_samples_train
     print(f'Training Accuracy: {train_accuracy}')
+    print(f'Training Loss: {train_loss}')
 
     unsegmented_average_accuracy = 0
     counter = 0
@@ -340,6 +360,16 @@ for epoch in range(num_epochs):
 
     accuracy_train_history.append(train_accuracy)
     maj_accuracy_train_history.append(average_epoch_accuracy)
+    loss_train_history.append(train_loss)
+
+    # Find the index of the lowest value in the array
+    lowest_index = np.argmin(best_validation_accuracies)
+
+    # Check if the number_to_check is higher than the lowest value
+    if train_accuracy > best_validation_accuracies[lowest_index]:
+        # Update the array with the new value
+        best_validation_accuracies[lowest_index] = train_accuracy
+        best_validation_accuracies_epoch[lowest_index] = epoch+1
 
     # Validating
     model.eval()
@@ -463,11 +493,25 @@ for epoch in range(num_epochs):
     accuracy_test_history.append(test_accuracy)
     maj_accuracy_test_history.append(average_epoch_accuracy)
 
+print("The 5 best train accuracies:")
+for i in range(0, 5):
+    print("Epoch ", best_validation_accuracies_epoch[i], ": Val = ", best_validation_accuracies[i])
 # Plot the accuracy improvement
 plt.plot(range(1, num_epochs + 1), accuracy_train_history, marker='o', label='Training')
-plt.plot(range(1, num_epochs + 1), accuracy_val_history, marker='o', label='Testing')
+plt.plot(range(1, num_epochs + 1), accuracy_val_history, marker='o', label='Validating')
+plt.plot(range(1, num_epochs + 1), accuracy_test_history, marker='o', label='Testing')
+plt.plot(range(1, num_epochs + 1), maj_accuracy_test_history, marker='o', label='Training (Majority label)')
+plt.plot(range(1, num_epochs + 1), maj_accuracy_test_history, marker='o', label='Validating (Majority label)')
+plt.plot(range(1, num_epochs + 1), maj_accuracy_test_history, marker='o', label='Testing (Majority label)')
 plt.title('Accuracy Improvement Over Epochs')
 plt.xlabel('Epoch')
 plt.ylabel('Accuracy')
+plt.legend()
+
+plt.figure()  # Create a new figure for the second plot
+plt.plot(range(1, num_epochs + 1), loss_train_history, marker='o', label='Training Loss')
+plt.title('Loss Improvement Over Epochs')
+plt.xlabel('Epoch')
+plt.ylabel('Loss')
 plt.legend()
 plt.show()
