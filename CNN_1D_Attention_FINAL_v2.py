@@ -534,6 +534,9 @@ for epoch in range(num_epochs):
     maj_accuracy_val_history.append(average_epoch_accuracy_val)
     loss_val_history.append(val_loss)
     
+    test_accuracy = np.zeros(3)
+    average_epoch_accuracy_test = np.zeros(3)
+
     for n_dataset in range(start, finish):
         # Testing
         model.eval()
@@ -562,9 +565,9 @@ for epoch in range(num_epochs):
                 for idx, file in enumerate(key_name):
                     test_datasets[n_dataset].df.loc[test_datasets[n_dataset].df['FileNames'] == file, 'Values'].iloc[0].append(torch.argmax(outputs, dim=1)[idx].item())
 
-        test_accuracy = total_correct_test / total_samples_test
+        test_accuracy[n_dataset] = total_correct_test / total_samples_test
         test_loss = total_loss_test / batches_counter
-        print(f'Test {n_dataset+1} Accuracy: {test_accuracy}')
+        print(f'Test {n_dataset+1} Accuracy: {test_accuracy[n_dataset]}')
         print(f'Test {n_dataset+1} Loss: {test_loss}')
 
         unsegmented_average_accuracy = 0
@@ -590,8 +593,8 @@ for epoch in range(num_epochs):
 
 
         test_datasets[n_dataset].df = pd.DataFrame({'FileNames': test_datasets[n_dataset].keys, 'Values': [[] for _ in range(len(test_datasets[n_dataset].keys))]})
-        average_epoch_accuracy_test = unsegmented_average_accuracy/counter
-        print("MAJORITY (TEST ", n_dataset+1, ": ", average_epoch_accuracy_test)
+        average_epoch_accuracy_test[n_dataset] = unsegmented_average_accuracy/counter
+        print("MAJORITY (TEST ", n_dataset+1, ": ", average_epoch_accuracy_test[n_dataset])
         #test_dataset.df.loc[test_dataset.df['FileNames'] == key_name, 'Values'].iloc[0].append(test_dataset)
 
         # Print class-wise accuracy for testing
@@ -599,8 +602,8 @@ for epoch in range(num_epochs):
             class_accuracy = class_correct_test[i] / class_total_test[i]
             print(f'Test {n_dataset+1} Class {i} Accuracy: {class_accuracy} | Total tests: {class_total_test[i]}')
         
-        accuracy_test_histories[n_dataset].append(test_accuracy)
-        maj_accuracy_test_histories[n_dataset].append(average_epoch_accuracy_test)
+        accuracy_test_histories[n_dataset].append(test_accuracy[n_dataset])
+        maj_accuracy_test_histories[n_dataset].append(average_epoch_accuracy_test[n_dataset])
         loss_test_histories[n_dataset].append(test_loss)
 
     # Find the index of the lowest value in the array
@@ -614,8 +617,8 @@ for epoch in range(num_epochs):
         best_val_accuracies[lowest_index] = val_accuracy
         best_maj_val_accuracies[lowest_index] = average_epoch_accuracy_val
         for n_dataset in range(start, finish):
-            best_test_accuracies[n_dataset][lowest_index] = test_accuracy
-            best_maj_test_accuracies[n_dataset][lowest_index] = average_epoch_accuracy_test
+            best_test_accuracies[n_dataset][lowest_index] = test_accuracy[n_dataset]
+            best_maj_test_accuracies[n_dataset][lowest_index] = average_epoch_accuracy_test[n_dataset]
         best_epoch[lowest_index] = epoch+1
 
 print("The 5 best val accuracies:")
@@ -686,3 +689,5 @@ plt.xlabel('Epoch')
 plt.ylabel('Loss')
 plt.legend()
 plt.show()
+
+print('end')
