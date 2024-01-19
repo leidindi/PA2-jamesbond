@@ -171,8 +171,8 @@ class TestDataset(Dataset):
         return signals, target, item_key
 
 # Define your data directories
-train_data_dir = '/Users/iacopoermacora/New Final Dataset/Intra/train'
-test_data_dir = '/Users/iacopoermacora/New Final Dataset/Intra/test'
+train_data_dir = 'C:/Users/lazar/OneDrive/Υπολογιστής/test/Final Project data dragon no artifacts/Intra/train'
+test_data_dir = 'C:/Users/lazar/OneDrive/Υπολογιστής/test/Final Project data dragon no artifacts/Intra/test'
 
 # Create instances of the dataset
 train_dataset = TrainDataset(train_data_dir)
@@ -249,6 +249,8 @@ class MEG_CNN1D(nn.Module):
         # Fully Connected Layers
         x = self.fc1(x)
         #print("After fc1", x.shape)
+        x = self.threshold1(x)
+        
         x = self.fc2(x)
         #print("After fc2", x.shape)
         x = F.softmax(x, dim=1)

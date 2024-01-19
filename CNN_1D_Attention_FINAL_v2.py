@@ -324,6 +324,8 @@ class MEG_CNN1D(nn.Module):
         # Fully Connected Layers
         x = self.fc1(x)
         #print("After fc1", x.shape)
+        x = self.threshold1(x)
+        
         x = self.fc2(x)
         #print("After fc2", x.shape)
         x = F.softmax(x, dim=1)
