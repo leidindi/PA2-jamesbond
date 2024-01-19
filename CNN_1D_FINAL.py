@@ -171,20 +171,40 @@ class TestDataset(Dataset):
         return signals, target, item_key
 
 # Define your data directories
-train_data_dir = 'C:/Users/lazar/OneDrive/Υπολογιστής/test/Final Project data dragon no artifacts/Intra/train'
-test_data_dir = 'C:/Users/lazar/OneDrive/Υπολογιστής/test/Final Project data dragon no artifacts/Intra/test'
+train_data_dir = '/Users/iacopoermacora/New Final Dataset/Cross/train'
+test_data_dir = '/Users/iacopoermacora/New Final Dataset/Cross/test'
+
+if "Cross" in test_data_dir:
+    start = 0
+    finish = 3
+else:
+    start = 0
+    finish = 1
+    
+
+test_data_dirs = []
 
 # Create instances of the dataset
 train_dataset = TrainDataset(train_data_dir)
 val_dataset = ValDataset(train_data_dir)
-test_dataset = TestDataset(test_data_dir)
+test_datasets = []
 
 batch_size = 32
 
 # Create DataLoader instances
 train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
-test_dataloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+test_dataloaders = []
+
+for n_dataset in range(start, finish): # Skip if intra
+    print(n_dataset)
+    if finish == 1:
+        test_data_dirs.append(test_data_dir)
+    else:
+        test_data_dirs.append(test_data_dir + str(n_dataset+1))
+    print(test_data_dirs[n_dataset])
+    test_datasets.append(TestDataset(test_data_dirs[n_dataset]))
+    test_dataloaders.append(DataLoader(test_datasets[n_dataset], batch_size=batch_size, shuffle=False))
 
 class MEG_CNN1D(nn.Module):
     def __init__(self, layer_one, layer_two, dropout_rate,):
@@ -206,9 +226,9 @@ class MEG_CNN1D(nn.Module):
         self.threshold2 = nn.ReLU()
         self.dropout2 = nn.Dropout(dropout_rate)
         self.pool2 = nn.MaxPool1d(kernel_size=2, stride=2)
-
+        # print("SIZE INPUT FC1 : ", ((160-((self.layer_one.kernel_size-1)-2*self.layer_one.padding))/2-((self.layer_two.kernel_size-1)-2*self.layer_two.padding))/2*self.layer_two.out_channels)
         # Fully Connected Layer
-        self.fc1 = nn.Linear(576, 128)  # Adjust the input size based on your data dimensions Input_size = self.layer
+        self.fc1 = nn.Linear(int(((160-((self.layer_one.kernel_size-1)-2*self.layer_one.padding))/2-((self.layer_two.kernel_size-1)-2*self.layer_two.padding))/2*self.layer_two.out_channels), 128) # ((160-((kernel_size_1-1)-2*padding_1))/2-((kernel_size_2-1)-2*padding_2))/2*out_channels_2
         self.fc2 = nn.Linear(128, 4)  # Adjust the output size based on your task
 
     def forward(self, x):
@@ -216,35 +236,35 @@ class MEG_CNN1D(nn.Module):
         
         # First Convolutional Layer
         # x = self.pool1(self.threshold1(self.batch_norm1(self.dropout1(F.relu(self.conv1(x))))))
-        #print("Before Conv1", x.shape)
+        # print("Before Conv1", x.shape)
         x = self.conv1(x)
-        #print("After Conv1", x.shape)
+        # print("After Conv1", x.shape)
         x = self.threshold1(x)
-        #print("After threshold1", x.shape)
+        # print("After threshold1", x.shape)
         x = self.batch_norm1(x)
-        #print("After batch_norm1", x.shape)
+        # print("After batch_norm1", x.shape)
         x = self.dropout1(x)
-        #print("After dropout1", x.shape)
+        # print("After dropout1", x.shape)
         x = self.pool1(x)
-        #print("After pool1", x.shape)
+        # print("After pool1", x.shape)
 
         # Second Convolutional Layer
         # x = self.pool2(self.threshold2(self.batch_norm2(self.dropout2(F.relu(self.conv2(x))))))
         x = self.conv2(x)
-        #print("After Conv2", x.shape)
+        # print("After Conv2", x.shape)
         x = self.threshold2(x)
-        #print("After threshold2", x.shape)
+        # print("After threshold2", x.shape)
         x = self.batch_norm2(x)
-        #print("After batch_norm2", x.shape)
+        # print("After batch_norm2", x.shape)
         x = self.dropout2(x)
-        #print("After dropout2", x.shape)
+        # print("After dropout2", x.shape)
         x = self.pool2(x)
-        #print("After pool2", x.shape)
+        # print("After pool2", x.shape)
 
         # Reshape before fully connected layer
         # x = x.view(-1, 16 * 40)  # Adjust the size based on your data dimensions
-        x = x.reshape((-1, 16*36))
-        #print("After reshape", x.shape)
+        x = x.reshape((-1, x.size(1)*x.size(2)))
+        # print("After reshape", x.shape)
 
         # Fully Connected Layers
         x = self.fc1(x)
@@ -252,9 +272,9 @@ class MEG_CNN1D(nn.Module):
         x = self.threshold1(x)
         
         x = self.fc2(x)
-        #print("After fc2", x.shape)
+        # print("After fc2", x.shape)
         x = F.softmax(x, dim=1)
-        #print("After softmax", x.shape)
+        # print("After softmax", x.shape)
 
         return x
 
@@ -270,6 +290,12 @@ layer_one = Layer_param(247, 64, 15, 1, 1) # in_channels, out_channels, kernel_s
 layer_two = Layer_param(64, 16, 5, 1, 1) # in_channels, out_channels, kernel_size, stride, padding
 dropout_rate = 0.5
 
+# after_convolv = 160-((kernel_size-1)-2*padding) #consider that stride is unchanged as 1
+# after_pool1 = after_convolv/2
+# after_convolv2 = after_pool1-((kernel_size-1)-2*padding) #consider that stride is unchanged as 1
+# after_pool2 = after_convolv2/2
+# TOTAL = ((160-((kernel_size_1-1)-2*padding_1))/2-((kernel_size_2-1)-2*padding_2))/2*out_channels_2
+
 model = MEG_CNN1D(layer_one, layer_two, dropout_rate)
 
 # Loss and optimizer
@@ -283,21 +309,21 @@ output_size = 4
 num_best_accuracies = 5
 best_train_accuracies = np.zeros(num_best_accuracies)
 best_val_accuracies = np.zeros(num_best_accuracies)
-best_test_accuracies = np.zeros(num_best_accuracies)
+best_test_accuracies = np.zeros((3, num_best_accuracies))
 best_maj_train_accuracies = np.zeros(num_best_accuracies)
 best_maj_val_accuracies = np.zeros(num_best_accuracies)
-best_maj_test_accuracies = np.zeros(num_best_accuracies)
+best_maj_test_accuracies = np.zeros((3, num_best_accuracies))
 best_epoch = np.zeros(num_best_accuracies)
 
 accuracy_train_history = []
 accuracy_val_history = []
-accuracy_test_history = []
+accuracy_test_histories = [[] for _ in range(3)]
 maj_accuracy_train_history = []
 maj_accuracy_val_history = []
-maj_accuracy_test_history = []
+maj_accuracy_test_histories = [[] for _ in range(3)]
 loss_train_history = []
 loss_val_history = []
-loss_test_history = []
+loss_test_histories = [[] for _ in range(3)]
 
 for epoch in range(num_epochs):
     print(f"Epoch {epoch + 1}/{num_epochs}")
@@ -439,74 +465,75 @@ for epoch in range(num_epochs):
     accuracy_val_history.append(val_accuracy)
     maj_accuracy_val_history.append(average_epoch_accuracy_val)
     loss_val_history.append(val_loss)
-
-    # Testing
-    model.eval()
-    total_correct_test = 0
-    total_samples_test = 0
-    total_loss_test = 0
-    class_correct_test = [0] * output_size
-    class_total_test = [0] * output_size
-    batches_counter = 0
-    with torch.no_grad():
-        for signals, targets, key_name in test_dataloader:
-            batches_counter += 1
-
-            outputs = model(signals)
-            loss = criterion(outputs, targets)
-            _, predicted_test = torch.max(outputs, 1)
-            total_samples_test += targets.size(0)
-            total_correct_test += (predicted_test == torch.argmax(targets, dim=1)).sum().item()
-            total_loss_test += loss.item()
-
-            # Calculate class-wise accuracy
-            for i in range(output_size):
-                class_total_test[i] += (targets[:, i] == 1).sum().item()
-                class_correct_test[i] += ((predicted_test == i) & (targets[:, i] == 1)).sum().item()
-            
-            for idx, file in enumerate(key_name):
-                test_dataset.df.loc[test_dataset.df['FileNames'] == file, 'Values'].iloc[0].append(torch.argmax(outputs, dim=1)[idx].item())
-
-    test_accuracy = total_correct_test / total_samples_test
-    test_loss = total_loss_test / batches_counter
-    print(f'Test Accuracy: {test_accuracy}')
-    print(f'Test Loss: {test_loss}')
-
-    unsegmented_average_accuracy = 0
-    counter = 0
-    for index, row in test_dataset.df.iterrows():
-        counter+=1
-        filename = row['FileNames']
-        values = row['Values']
-        predicted_class = max(set(values), key=values.count)
-        if filename.startswith('rest'):
-            if predicted_class==0:
-                unsegmented_average_accuracy += 1
-        elif filename.startswith('task_motor'):
-            if predicted_class==1:
-                unsegmented_average_accuracy += 1
-        elif filename.startswith('task_story_math'):
-            if predicted_class==2:
-                unsegmented_average_accuracy += 1
-        elif filename.startswith('task_working_memory'):
-            if predicted_class==3:
-                unsegmented_average_accuracy += 1
-        test_dataset.df.loc[test_dataset.df['FileNames'] == filename, 'Values'].iloc[0] = []
-
-
-    test_dataset.df = pd.DataFrame({'FileNames': test_dataset.keys, 'Values': [[] for _ in range(len(test_dataset.keys))]})
-    average_epoch_accuracy_test = unsegmented_average_accuracy/counter
-    print("MAJORITY (TEST): ", average_epoch_accuracy_test)
-    #test_dataset.df.loc[test_dataset.df['FileNames'] == key_name, 'Values'].iloc[0].append(test_dataset)
-
-    # Print class-wise accuracy for testing
-    for i in range(output_size):
-        class_accuracy = class_correct_test[i] / class_total_test[i]
-        print(f'Test Class {i} Accuracy: {class_accuracy} | Total tests: {class_total_test[i]}')
     
-    accuracy_test_history.append(test_accuracy)
-    maj_accuracy_test_history.append(average_epoch_accuracy_test)
-    loss_test_history.append(test_loss)
+    for n_dataset in range(start, finish):
+        # Testing
+        model.eval()
+        total_correct_test = 0
+        total_samples_test = 0
+        total_loss_test = 0
+        class_correct_test = [0] * output_size
+        class_total_test = [0] * output_size
+        batches_counter = 0
+        with torch.no_grad():
+            for signals, targets, key_name in test_dataloaders[n_dataset]:
+                batches_counter += 1
+
+                outputs = model(signals)
+                loss = criterion(outputs, targets)
+                _, predicted_test = torch.max(outputs, 1)
+                total_samples_test += targets.size(0)
+                total_correct_test += (predicted_test == torch.argmax(targets, dim=1)).sum().item()
+                total_loss_test += loss.item()
+
+                # Calculate class-wise accuracy
+                for i in range(output_size):
+                    class_total_test[i] += (targets[:, i] == 1).sum().item()
+                    class_correct_test[i] += ((predicted_test == i) & (targets[:, i] == 1)).sum().item()
+                
+                for idx, file in enumerate(key_name):
+                    test_datasets[n_dataset].df.loc[test_datasets[n_dataset].df['FileNames'] == file, 'Values'].iloc[0].append(torch.argmax(outputs, dim=1)[idx].item())
+
+        test_accuracy = total_correct_test / total_samples_test
+        test_loss = total_loss_test / batches_counter
+        print(f'Test {n_dataset+1} Accuracy: {test_accuracy}')
+        print(f'Test {n_dataset+1} Loss: {test_loss}')
+
+        unsegmented_average_accuracy = 0
+        counter = 0
+        for index, row in test_datasets[n_dataset].df.iterrows():
+            counter+=1
+            filename = row['FileNames']
+            values = row['Values']
+            predicted_class = max(set(values), key=values.count)
+            if filename.startswith('rest'):
+                if predicted_class==0:
+                    unsegmented_average_accuracy += 1
+            elif filename.startswith('task_motor'):
+                if predicted_class==1:
+                    unsegmented_average_accuracy += 1
+            elif filename.startswith('task_story_math'):
+                if predicted_class==2:
+                    unsegmented_average_accuracy += 1
+            elif filename.startswith('task_working_memory'):
+                if predicted_class==3:
+                    unsegmented_average_accuracy += 1
+            test_datasets[n_dataset].df.loc[test_datasets[n_dataset].df['FileNames'] == filename, 'Values'].iloc[0] = []
+
+
+        test_datasets[n_dataset].df = pd.DataFrame({'FileNames': test_datasets[n_dataset].keys, 'Values': [[] for _ in range(len(test_datasets[n_dataset].keys))]})
+        average_epoch_accuracy_test = unsegmented_average_accuracy/counter
+        print("MAJORITY (TEST ", n_dataset+1, ": ", average_epoch_accuracy_test)
+        #test_dataset.df.loc[test_dataset.df['FileNames'] == key_name, 'Values'].iloc[0].append(test_dataset)
+
+        # Print class-wise accuracy for testing
+        for i in range(output_size):
+            class_accuracy = class_correct_test[i] / class_total_test[i]
+            print(f'Test {n_dataset+1} Class {i} Accuracy: {class_accuracy} | Total tests: {class_total_test[i]}')
+        
+        accuracy_test_histories[n_dataset].append(test_accuracy)
+        maj_accuracy_test_histories[n_dataset].append(average_epoch_accuracy_test)
+        loss_test_histories[n_dataset].append(test_loss)
 
     # Find the index of the lowest value in the array
     lowest_index = np.argmin(best_val_accuracies)
@@ -518,8 +545,9 @@ for epoch in range(num_epochs):
         best_maj_train_accuracies[lowest_index] = average_epoch_accuracy_train
         best_val_accuracies[lowest_index] = val_accuracy
         best_maj_val_accuracies[lowest_index] = average_epoch_accuracy_val
-        best_test_accuracies[lowest_index] = test_accuracy
-        best_maj_test_accuracies[lowest_index] = average_epoch_accuracy_test
+        for n_dataset in range(start, finish):
+            best_test_accuracies[n_dataset][lowest_index] = test_accuracy
+            best_maj_test_accuracies[n_dataset][lowest_index] = average_epoch_accuracy_test
         best_epoch[lowest_index] = epoch+1
 
 print("The 5 best val accuracies:")
@@ -527,26 +555,32 @@ for i in range(0, 5):
     print("Epoch ", best_epoch[i], ":")
     print("Train = ", best_train_accuracies[i])
     print("Val = ", best_val_accuracies[i])
-    print("Test = ", best_test_accuracies[i])
+    for n_dataset in range(start, finish):
+        print("Test ", n_dataset+1, " = ", best_test_accuracies[n_dataset][i])
     print("Train (maj) = ", best_maj_train_accuracies[i])
     print("Val (maj) = ", best_maj_val_accuracies[i])
-    print("Test (maj) = ", best_maj_test_accuracies[i])
+    for n_dataset in range(start, finish):
+        print("Test ", n_dataset+1, " = (maj) = ", best_maj_test_accuracies[n_dataset][i])
     print("---------------------------------------------------")
 print("Average best train accuracy: ", sum(best_train_accuracies) / len(best_train_accuracies))
 print("Average best val accuracy: ", sum(best_val_accuracies) / len(best_val_accuracies))
-print("Average best test accuracy: ", sum(best_test_accuracies) / len(best_test_accuracies))
+for n_dataset in range(start, finish):
+    print("Average best test (", n_dataset+1, ") accuracy: ", sum(best_test_accuracies[n_dataset]) / len(best_test_accuracies[n_dataset]))
 print("Average best train (maj) accuracy: ", sum(best_maj_train_accuracies) / len(best_maj_train_accuracies))
 print("Average best val (maj) accuracy: ", sum(best_maj_val_accuracies) / len(best_maj_val_accuracies))
-print("Average best test (maj) accuracy: ", sum(best_maj_test_accuracies) / len(best_maj_test_accuracies))
+for n_dataset in range(start, finish):
+    print("Average best test (", n_dataset+1, ") (maj) accuracy: ", sum(best_maj_test_accuracies[n_dataset]) / len(best_maj_test_accuracies[n_dataset]))
 
 
 # Plot the accuracy improvement
 plt.plot(range(1, num_epochs + 1), accuracy_train_history, marker='o', label='Training')
 plt.plot(range(1, num_epochs + 1), accuracy_val_history, marker='o', label='Validating')
-plt.plot(range(1, num_epochs + 1), accuracy_test_history, marker='o', label='Testing')
+for n_dataset in range(start, finish):
+    plt.plot(range(1, num_epochs + 1), accuracy_test_histories[n_dataset], marker='o', label='Testing '+str(n_dataset+1))
 plt.plot(range(1, num_epochs + 1), maj_accuracy_train_history, marker='o', label='Training (Majority label)')
 plt.plot(range(1, num_epochs + 1), maj_accuracy_val_history, marker='o', label='Validating (Majority label)')
-plt.plot(range(1, num_epochs + 1), maj_accuracy_test_history, marker='o', label='Testing (Majority label)')
+for n_dataset in range(start, finish):
+    plt.plot(range(1, num_epochs + 1), maj_accuracy_test_histories[n_dataset], marker='o', label='Testing '+str(n_dataset+1)+' (Majority label)')
 plt.title('Accuracy Improvement Over Epochs')
 plt.xlabel('Epoch')
 plt.ylabel('Accuracy')
@@ -556,7 +590,8 @@ plt.legend()
 plt.figure()  # Create a new figure for the second plot
 plt.plot(range(1, num_epochs + 1), maj_accuracy_train_history, marker='o', label='Training (Majority label)')
 plt.plot(range(1, num_epochs + 1), maj_accuracy_val_history, marker='o', label='Validating (Majority label)')
-plt.plot(range(1, num_epochs + 1), maj_accuracy_test_history, marker='o', label='Testing (Majority label)')
+for n_dataset in range(start, finish):
+    plt.plot(range(1, num_epochs + 1), maj_accuracy_test_histories[n_dataset], marker='o', label='Testing '+str(n_dataset+1)+' (Majority label)')
 plt.title('Accuracy Improvement Over Epochs (ONLY MAJORITY)')
 plt.xlabel('Epoch')
 plt.ylabel('Accuracy')
@@ -566,7 +601,8 @@ plt.legend()
 plt.figure()  # Create a new figure for the second plot
 plt.plot(range(1, num_epochs + 1), accuracy_train_history, marker='o', label='Training')
 plt.plot(range(1, num_epochs + 1), accuracy_val_history, marker='o', label='Validating')
-plt.plot(range(1, num_epochs + 1), accuracy_test_history, marker='o', label='Testing')
+for n_dataset in range(start, finish):
+    plt.plot(range(1, num_epochs + 1), accuracy_test_histories[n_dataset], marker='o', label='Testing '+str(n_dataset+1))
 plt.title('Accuracy Improvement Over Epochs (ONLY SEGMENTS)')
 plt.xlabel('Epoch')
 plt.ylabel('Accuracy')
@@ -575,7 +611,8 @@ plt.legend()
 plt.figure()  # Create a new figure for the second plot
 plt.plot(range(1, num_epochs + 1), loss_train_history, marker='o', label='Training Loss')
 plt.plot(range(1, num_epochs + 1), loss_val_history, marker='o', label='Validation Loss')
-plt.plot(range(1, num_epochs + 1), loss_test_history, marker='o', label='Testing Loss')
+for n_dataset in range(start, finish):
+    plt.plot(range(1, num_epochs + 1), loss_test_histories[n_dataset], marker='o', label='Testing '+str(n_dataset+1)+' Loss')
 plt.title('Loss Improvement Over Epochs')
 plt.xlabel('Epoch')
 plt.ylabel('Loss')
