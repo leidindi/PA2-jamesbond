@@ -1,6 +1,7 @@
 import random
 import numpy as np
-import torch
+import torch 
+from torch import einsum
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
@@ -11,6 +12,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 import re
 import pandas as pd
+from einops import rearrange 
 
 val_prefixes = [
     'rest_105923_1',
@@ -28,7 +30,7 @@ val_prefixes = [
 ]
 
 def get_dataset_name(file_name_with_dir):
-    filename_without_dir = file_name_with_dir.split('/')[-1] #If you use windows change / with \\
+    filename_without_dir = file_name_with_dir.split('\\')[-1] #If you use windows change / with \\
     temp = filename_without_dir.split('_')[:-1]
     dataset_name = "_".join(temp)
     return dataset_name
@@ -43,6 +45,72 @@ def seed_everything(seed):
     torch.backends.cudnn.benchmark = False
 
 seed_everything(42)
+
+class Attention(nn.Module):
+    def __init__(self, dim, dim_head=64, heads=8, dropout=0.0):
+        super().__init__()
+        self.heads = heads
+        self.scale = dim_head**-0.5
+        inner_dim = dim_head * heads
+
+        self.to_qkv = nn.Linear(dim, inner_dim * 3, bias=False)
+        self.to_out = nn.Sequential(nn.Linear(inner_dim, dim), nn.Dropout(dropout))
+
+        #self.apply(self._init_weights)
+    '''  
+    def _init_weights(self,m):
+        if isinstance(m, nn.Linear):
+            trunc_normal_(m.weight, std=0.2)
+            if isinstance(m, nn.Linear) and m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.constant_(m.bias, 0)
+            nn.init.constant_(m.weight, 1)
+    '''
+    def forward(
+        self,
+        x,
+        einops_from,
+        einops_to,
+        mask=None,
+        **einops_dims
+    ):
+        h = self.heads
+        q, k, v = self.to_qkv(x).chunk(3, dim=-1)
+        q, k, v = map(lambda t: rearrange(t, "b n (h d) -> (b h) n d", h=h), (q, k, v))
+
+        q = q * self.scale
+
+        # rearrange across time or space
+        q_, k_, v_ = map(
+            lambda t: rearrange(t, f"{einops_from} -> {einops_to}", **einops_dims),
+            (q, k, v),
+        )
+
+        # attention
+        out = attn(q_, k_, v_, mask=mask)
+
+        # merge back time or space
+        out = rearrange(out, f"{einops_to} -> {einops_from}", **einops_dims)
+
+        # merge back the heads
+        out = rearrange(out, "(b h) n d -> b n (h d)", h=h)
+
+        # combine heads out
+        return self.to_out(out)
+
+
+def attn(q, k, v, mask=None):
+    sim = einsum("b i d, b j d -> b i j", q, k)
+
+    if mask is not None:
+        max_neg_value = -torch.finfo(sim.dtype).max
+        sim.masked_fill_(~mask, max_neg_value)
+
+    attn = sim.softmax(dim=-1)
+    out = einsum("b i j, b j d -> b i d", attn, v)
+    return out
+
 
 class TrainDataset(Dataset):
     def __init__(self, root_dir, file_extension='.h5'):
@@ -171,8 +239,8 @@ class TestDataset(Dataset):
         return signals, target, item_key
 
 # Define your data directories
-train_data_dir = '/Users/iacopoermacora/New Final Dataset/Intra/train'
-test_data_dir = '/Users/iacopoermacora/New Final Dataset/Intra/test'
+train_data_dir = 'C:/Users/lazar/OneDrive/Υπολογιστής/test/Final Project data dragon no artifacts/Intra/train'
+test_data_dir = 'C:/Users/lazar/OneDrive/Υπολογιστής/test/Final Project data dragon no artifacts/Intra/test'
 
 # Create instances of the dataset
 train_dataset = TrainDataset(train_data_dir)
@@ -207,6 +275,9 @@ class MEG_CNN1D(nn.Module):
         self.dropout2 = nn.Dropout(dropout_rate)
         self.pool2 = nn.MaxPool1d(kernel_size=2, stride=2)
 
+        # Attention Layer
+        self.attention_layer = Attention(74, dim_head = 64, heads = 8, dropout = 0.3)
+
         # Fully Connected Layer
         self.fc1 = nn.Linear(576, 128)  # Adjust the input size based on your data dimensions Input_size = self.layer
         self.fc2 = nn.Linear(128, 4)  # Adjust the output size based on your task
@@ -228,6 +299,8 @@ class MEG_CNN1D(nn.Module):
         x = self.pool1(x)
         #print("After pool1", x.shape)
 
+        x = x + self.attention_layer(x, 'b f d', 'b f d')
+
         # Second Convolutional Layer
         # x = self.pool2(self.threshold2(self.batch_norm2(self.dropout2(F.relu(self.conv2(x))))))
         x = self.conv2(x)
@@ -240,6 +313,8 @@ class MEG_CNN1D(nn.Module):
         #print("After dropout2", x.shape)
         x = self.pool2(x)
         #print("After pool2", x.shape)
+
+        
 
         # Reshape before fully connected layer
         # x = x.view(-1, 16 * 40)  # Adjust the size based on your data dimensions
@@ -275,7 +350,7 @@ criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.00001, weight_decay=1e-6)
 
 # Training
-num_epochs = 2
+num_epochs = 150
 output_size = 4
 # Number of best accuracies to keep track of
 num_best_accuracies = 5
@@ -377,11 +452,9 @@ for epoch in range(num_epochs):
     class_correct_val = [0] * output_size
     class_total_val = [0] * output_size
     batches_counter = 0
-
     with torch.no_grad():
         for signals, targets, key_name in val_dataloader:
             batches_counter += 1
-
             outputs = model(signals)
             loss = criterion(outputs, targets)
             _, predicted_val = torch.max(outputs, 1)
@@ -445,11 +518,11 @@ for epoch in range(num_epochs):
     total_loss_test = 0
     class_correct_test = [0] * output_size
     class_total_test = [0] * output_size
-    batches_counter = 0
+    batches_counter = 0 
+
     with torch.no_grad():
         for signals, targets, key_name in test_dataloader:
-            batches_counter += 1
-
+            batches_counter+=1
             outputs = model(signals)
             loss = criterion(outputs, targets)
             _, predicted_test = torch.max(outputs, 1)
