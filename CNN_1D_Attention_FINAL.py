@@ -646,8 +646,13 @@ plt.legend()
 
 plt.figure()  # Create a new figure for the second plot
 plt.plot(range(1, num_epochs + 1), loss_train_history, marker='o', label='Training Loss')
+plt.plot(range(1, num_epochs + 1), loss_val_history, marker='o', label='Validation Loss')
+plt.plot(range(1, num_epochs + 1), loss_test_history, marker='o', label='Testing Loss')
+
 plt.title('Loss Improvement Over Epochs')
 plt.xlabel('Epoch')
 plt.ylabel('Loss')
 plt.legend()
 plt.show()
+
+print(x)
